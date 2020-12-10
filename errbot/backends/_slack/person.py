@@ -1,9 +1,5 @@
-
 import logging
-from errbot.backends.base import (
-    Person,
-    RoomDoesNotExistError
-)
+from errbot.backends.base import Person, RoomDoesNotExistError
 from slack_sdk.web import WebClient
 
 log = logging.getLogger(__name__)

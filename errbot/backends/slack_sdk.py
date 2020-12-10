@@ -381,9 +381,7 @@ class SlackBackend(ErrBot):
 
     def serve_forever_events(self):
         self.slack_web = WebClient(token=self.token, proxy=self.proxies)
-        self.slack_events = SlackEventAdapter(
-            self.signing_secret, "/slack/events", flask_app
-        )
+        self.slack_events = SlackEventAdapter(self.signing_secret, "/slack/events", flask_app)
 
         log.info("Verifying authentication token")
         self.auth = self.slack_web.auth_test()
