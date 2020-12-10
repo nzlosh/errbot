@@ -72,7 +72,7 @@ class SlackPerson(Person):
             log.error("Cannot find user with ID %s" % self._userid)
             return
 
-        self._email = user["profile"]["email"]
+        self._email = user["profile"].get("email", "not available")
         self._fullname = user["real_name"]
         self._username = user["name"]
 

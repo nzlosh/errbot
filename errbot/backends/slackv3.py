@@ -77,7 +77,6 @@ COLORS = {
 }  # Slack doesn't know its colors
 
 
-# FIXME This class might be able to be replaced by SlackApiError.
 class SlackAPIResponseError(RuntimeError):
     """Slack API returned a non-OK response"""
 
@@ -181,10 +180,6 @@ class SlackBackend(ErrBot):
         self.token = identity.get("token", None)
         self.proxies = identity.get("proxies", None)
 
-        # Select which Slack API model to use.  Default to Real-Time Messaging API to remain
-        # backward compatiable with the original errbot slack backend.
-        self.slack_api = identity.get("api", "rtm")
-
         if not self.token:
             log.fatal(
                 'You need to set your token (found under "Bot Integration" on Slack) in '
@@ -193,20 +188,12 @@ class SlackBackend(ErrBot):
             )
             sys.exit(1)
 
-        # Handle extra variables when using Events API.
-        if self.slack_api == "events":
-            self.signing_secret = identity.get("signing_secret", None)
-            if not self.signing_secret:
-                log.fatal(
-                    'You need to set your signing_secret (found under "Bot Integration" on Slack)'
-                    " in the BOT_IDENTITY setting in your configuration. Without this secret I "
-                    "cannot receive events from Slack."
-                )
-                sys.exit(1)
+        self.signing_secret = identity.get("signing_secret", None)
 
-        self.slack_web = None  # Will be initialized in serve_once
+        # Slack objects will be initialised in the serve_forever method.
+        self.slack_web = None
         self.slack_rtm = None
-        self.slack_events = None  # Will be initialized in serve_once
+        self.slack_events = None
         self.bot_identifier = None
 
         compact = config.COMPACT_OUTPUT if hasattr(config, "COMPACT_OUTPUT") else False
@@ -218,10 +205,6 @@ class SlackBackend(ErrBot):
         Slack supports upto 40000 characters per message, Errbot maintains 4096 by default.
         """
         super().set_message_size_limit(limit, hard_limit)
-
-    # Listen for oauthv2 challenge-response
-    def oauth_challenge_response(self):
-        raise NotImplementedError
 
     @staticmethod
     def _unpickle_identifier(identifier_str):
@@ -265,33 +248,91 @@ class SlackBackend(ErrBot):
         self.bot_alt_prefixes = tuple(x.lower() for x in self.bot_config.BOT_ALT_PREFIXES)
         log.debug("Converted bot_alt_prefixes: %s", self.bot_config.BOT_ALT_PREFIXES)
 
-    def _setup_slack_callbacks(self):
-        @RTMClient.run_on(event="message")
-        def serve_messages(**payload):
-            self._message_event_handler(payload["web_client"], payload["data"])
-
-        @RTMClient.run_on(event="member_joined_channel")
-        def serve_joins(**payload):
-            self._member_joined_channel_event_handler(payload["web_client"], payload["data"])
-
-        @RTMClient.run_on(event="hello")
-        def serve_hellos(**payload):
-            self._hello_event_handler(payload["web_client"], payload["data"])
-
-        @RTMClient.run_on(event="presence_change")
-        def serve_presences(**payload):
-            self._presence_change_event_handler(payload["web_client"], payload["data"])
-
-    def serve_once(self):
-        self.debug("Serve once isn't supported. Stopping after 1 second.")
-        sleep(1)
-
-    def serve_forever(self):
-        if self.slack_api == "rtm":
-            log.debug("Running RTM ")
-            self.serve_forever_rtm()
-        else:
-            self.serve_forever_events()
+    def _setup_rtm_callbacks(self):
+        rtm_events = [
+            "accounts_changed",
+            "bot_added",
+            "bot_changed",
+            "channel_archive",
+            "channel_created",
+            "channel_deleted",
+            "channel_history_changed",
+            "channel_joined",
+            "channel_left",
+            "channel_marked",
+            "channel_rename",
+            "channel_unarchive",
+            "commands_changed",
+            "dnd_updated",
+            "dnd_updated_user",
+            "email_domain_changed",
+            "emoji_changed",
+            "external_org_migration_finished",
+            "external_org_migration_started",
+            "file_change",
+            "file_comment_added",
+            "file_comment_deleted",
+            "file_comment_edited",
+            "file_created",
+            "file_deleted",
+            "file_public",
+            "file_shared",
+            "file_unshared",
+            "goodbye",
+            "group_archive",
+            "group_close",
+            "group_deleted",
+            "group_history_changed",
+            "group_joined",
+            "group_left",
+            "group_marked",
+            "group_open",
+            "group_rename",
+            "group_unarchive",
+            "hello",
+            "im_close",
+            "im_created",
+            "im_history_changed",
+            "im_marked",
+            "im_open",
+            "manual_presence_change",
+            "member_joined_channel",
+            "member_left_channel",
+            "message",
+            "pin_added",
+            "pin_removed",
+            "pref_change",
+            "presence_change",
+            "presence_query",
+            "presence_sub",
+            "reaction_added",
+            "reaction_removed",
+            "reconnect_url",
+            "star_added",
+            "star_removed",
+            "subteam_created",
+            "subteam_members_changed",
+            "subteam_self_added",
+            "subteam_self_removed",
+            "subteam_updated",
+            "team_domain_change",
+            "team_join",
+            "team_migration_started",
+            "team_plan_change",
+            "team_pref_change",
+            "team_profile_change",
+            "team_profile_delete",
+            "team_profile_reorder",
+            "team_rename",
+            "user_change",
+            "user_typing",
+        ]
+        for event_type in rtm_events:
+            try:
+                event_handler = getattr(self, f"_rtm_handle_{event_type}")
+                self.slack_rtm.on(event=event_type, callback=event_handler)
+            except AttributeError:
+                pass
 
     def _setup_event_callbacks(self):
         # List of events obtained from https://api.slack.com/events
@@ -338,6 +379,7 @@ class SlackBackend(ErrBot):
             "im_created",
             "im_history_changed",
             "im_open",
+            "hello",
             "invite_requested",
             "link_shared",
             "member_joined_channel",
@@ -379,9 +421,8 @@ class SlackBackend(ErrBot):
 
         self.connect_callback()
 
-    def serve_forever_events(self):
+    def serve_forever(self):
         self.slack_web = WebClient(token=self.token, proxy=self.proxies)
-        self.slack_events = SlackEventAdapter(self.signing_secret, "/slack/events", flask_app)
 
         log.info("Verifying authentication token")
         self.auth = self.slack_web.auth_test()
@@ -390,20 +431,46 @@ class SlackBackend(ErrBot):
             raise SlackAPIResponseError(
                 error=f"Couldn't authenticate with Slack. Server said: {self.auth['error']}"
             )
-        log.debug("Token accepted")
-        self._setup_event_callbacks()
-
+        log.info("Token accepted")
         self.bot_identifier = SlackPerson(self.slack_web, self.auth["user_id"])
-
         log.debug(self.bot_identifier)
 
         # Inject bot identity to alternative prefixes
         self.update_alternate_prefixes()
 
-        log.debug("Initialized, waiting for events")
+        # detect api type based on auth_test response
+        is_rtm_api = "bot:basic" in self.auth.headers["x-oauth-scopes"]
+
+        if is_rtm_api:
+            log.info("Using RTM API")
+            self.slack_rtm = RTMClient(token=self.token, proxy=self.proxies, auto_reconnect=True)
+
+            @RTMClient.run_on(event="open")
+            def get_bot_identity(**payload):
+                self.bot_identifier = SlackPerson(payload["web_client"], payload["data"]["self"]["id"])
+                # only hook up the message callback once we have our identity set.
+                self._setup_rtm_callbacks()
+        else:
+            if not self.signing_secret:
+                log.fatal(
+                    'You need to set your signing_secret (found under "Bot Integration" on Slack)'
+                    " in the BOT_IDENTITY setting in your configuration. Without this secret I "
+                    "cannot receive events from Slack."
+                )
+                sys.exit(1)
+            log.info("Using Events API")
+            self.slack_events = SlackEventAdapter(self.signing_secret, "/slack/events", flask_app)
+            self._setup_event_callbacks()
+
+
         try:
-            while True:
-                sleep(1)
+            if is_rtm_api:
+                log.info("Connecting to Slack RTM API")
+                self.slack_rtm.start()
+            else:
+                log.debug("Initialized, waiting for events")
+                while True:
+                    sleep(1)
         except KeyboardInterrupt:
             log.info("Interrupt received, shutting down..")
             return True
@@ -415,69 +482,47 @@ class SlackBackend(ErrBot):
 
     def _generic_wrapper(self, event_data):
         """Calls the event handler based on the event type"""
-        log.debug("Recived event: {}".format(str(event_data)))
+        log.debug("Received event: {}".format(str(event_data)))
         event = event_data["event"]
         event_type = event["type"]
 
         try:
-            event_handler = getattr(self, f"_{event_type}_event_handler")
+            event_handler = getattr(self, f"_handle_{event_type}")
             return event_handler(self.slack_web, event)
         except AttributeError:
             log.info(f"Event type {event_type} not supported")
 
-    def serve_forever_rtm(self):
-        self.slack_web = WebClient(token=self.token, proxy=self.proxies)
-        self.slack_rtm = RTMClient(token=self.token, proxy=self.proxies, auto_reconnect=True)
-
-        @RTMClient.run_on(event="open")
-        def get_bot_identity(**payload):
-            self.bot_identifier = SlackPerson(payload["web_client"], payload["data"]["self"]["id"])
-            # only hook up the message callback once we have our identity set.
-            self._setup_slack_callbacks()
-
-        # log.info('Verifying authentication token')
-        # self.auth = self.api_call("auth.test", raise_errors=False)
-        # if not self.auth['ok']:
-        #     raise SlackAPIResponseError(error=f"Couldn't authenticate with Slack. Server said: {self.auth['error']}")
-        # log.debug("Token accepted")
-
-        log.info("Connecting to Slack real-time-messaging API")
-        self.slack_rtm.start()
-        # Inject bot identity to alternative prefixes
-        self.update_alternate_prefixes()
-
-        try:
-            while True:
-                sleep(1)
-        except KeyboardInterrupt:
-            log.info("Interrupt received, shutting down..")
-            return True
-        except Exception:
-            log.exception("Error reading from RTM stream:")
-        finally:
-            log.debug("Triggering disconnect callback")
-            self.disconnect_callback()
-
-    def _hello_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_hello(self, **payload):
         """Event handler for the 'hello' event"""
-        self.slack_web = webclient
+        self.slack_web = payload["web_client"]
         self.connect_callback()
         self.callback_presence(Presence(identifier=self.bot_identifier, status=ONLINE))
 
-    def _reaction_added_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_goodbye(self, **payload):
+        """Handle Slack server's intention to close the connection"""
+        log.info("Received 'goodbye' from slack server.  Perform pre-emptive disconnect/reconnect.")
+        self.slack_rtm.stop()
+
+    def _rtm_handle_reaction_added(self, **payload):
+        self._handle_reaction_added(payload["web_client"], payload["data"])
+
+    def _handle_reaction_added(self, webclient: WebClient, event):
         """Event handler for the 'reaction_added' event"""
         emoji = event["reaction"]
         log.debug("Added reaction: {}".format(emoji))
 
-    def _reaction_removed_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_reaction_removed(self, **payload):
+        self._handle_reaction_removed(payload["web_client"], payload["data"])
+
+    def _handle_reaction_removed(self, webclient: WebClient, event):
         """Event handler for the 'reaction_removed' event"""
         emoji = event["reaction"]
         log.debug("Removed reaction: {}".format(emoji))
 
-    def _presence_change_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_presence_change(self, **payload):
         """Event handler for the 'presence_change' event"""
-
-        idd = SlackPerson(webclient, event["user"])
+        event = payload["data"]
+        idd = SlackPerson(payload["web_client"], event["user"])
         presence = event["presence"]
         # According to https://api.slack.com/docs/presence, presence can
         # only be one of 'active' and 'away'
@@ -492,7 +537,10 @@ class SlackBackend(ErrBot):
             status = ONLINE
         self.callback_presence(Presence(identifier=idd, status=status))
 
-    def _message_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_message(self, **payload):
+        self._handle_message(payload["web_client"], payload["data"])
+
+    def _handle_message(self, webclient: WebClient, event):
         """Event handler for the 'message' event"""
         channel = event["channel"]
         if channel[0] not in "CGD":
@@ -559,7 +607,7 @@ class SlackBackend(ErrBot):
             msg.to = SlackRoom(webclient=webclient, channelid=event["channel"], bot=self)
             channel_link_name = msg.to.name
 
-        # TODO: port to slackclient2
+        # TODO: port to slack_sdk
         # msg.extras['url'] = f'https://{self.slack_web.server.domain}.slack.com/archives/' \
         #                     f'{channel_link_name}/p{self._ts_for_message(msg).replace(".", "")}'
 
@@ -568,7 +616,10 @@ class SlackBackend(ErrBot):
         if mentioned:
             self.callback_mention(msg, mentioned)
 
-    def _member_joined_channel_event_handler(self, webclient: WebClient, event):
+    def _rtm_handle_member_joined_channel(self, **payload):
+        self._handle_member_joined_channel(payload["web_client"], payload["data"])
+
+    def _handle_member_joined_channel(self, webclient: WebClient, event):
         """Event handler for the 'member_joined_channel' event"""
         user = SlackPerson(webclient, event["user"])
         if user == self.bot_identifier:
@@ -1193,7 +1244,8 @@ class SlackRoom(Room):
         log.info("Joining channel %s", str(self))
         try:
             self._bot.slack_web.channels_join(name=self.name)
-        except BotUserAccessError as e:
+        except (BotUserAccessError, SlackApiError) as e:
+            log.error(f"Unable to join channel '{self.name}'. {str(e)}")
             raise RoomError(f"Unable to join channel. {USER_IS_BOT_HELPTEXT}")
 
     def leave(self, reason=None):
