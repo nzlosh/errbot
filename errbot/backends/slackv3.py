@@ -689,7 +689,7 @@ class SlackBackend(ErrBot):
             channel for channel in response["channels"] if channel["is_member"] or not joined_only
         ]
 
-        response = self.slack_web.groups_list(exclude_archived=exclude_archived)
+        response = self.slack_web.users_conversations(exclude_archived=exclude_archived)
         # No need to filter for 'is_member' in this next call (it doesn't
         # (even exist) because leaving a group means you have to get invited
         # back again by somebody else.
@@ -1243,7 +1243,7 @@ class SlackRoom(Room):
     def join(self, username=None, password=None):
         log.info("Joining channel %s", str(self))
         try:
-            self._bot.slack_web.channels_join(name=self.name)
+            self._bot.slack_web.conversations_join(channel=self.name)
         except (BotUserAccessError, SlackApiError) as e:
             log.error(f"Unable to join channel '{self.name}'. {str(e)}")
             raise RoomError(f"Unable to join channel. {USER_IS_BOT_HELPTEXT}")
@@ -1255,7 +1255,7 @@ class SlackRoom(Room):
                 self._bot.slack_web.channels_leave(channel=self.id)
             else:
                 log.info("Leaving group %s (%s)", self, self.id)
-                self._bot.slack_web.groups_leave(channel=self.id)
+                self._bot.slack_web.conversations_leave(channel=self.id)
         except SlackAPIResponseError as e:
             if e.error == "user_is_bot":
                 raise RoomError(f"Unable to leave channel. {USER_IS_BOT_HELPTEXT}")
@@ -1267,10 +1267,10 @@ class SlackRoom(Room):
         try:
             if private:
                 log.info("Creating group %s.", self)
-                self._bot.slack_web.groups_create(name=self.name)
+                self._bot.slack_web.conversations_create(name=self.name, is_private=True)
             else:
                 log.info("Creating channel %s.", self)
-                self._bot.slack_web.channels_create(name=self.name)
+                self._bot.slack_web.conversations_create(name=self.name)
         except SlackAPIResponseError as e:
             if e.error == "user_is_bot":
                 raise RoomError(f"Unable to create channel. {USER_IS_BOT_HELPTEXT}")
