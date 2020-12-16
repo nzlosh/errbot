@@ -1241,9 +1241,9 @@ class SlackRoom(Room):
         return self._name
 
     def join(self, username=None, password=None):
-        log.info("Joining channel %s", str(self))
+        log.info("Joining channel '{}'".format(self.name))
         try:
-            self._bot.slack_web.conversations_join(channel=self.name)
+            self._bot.slack_web.conversations_join(channel=self.id)
         except (BotUserAccessError, SlackApiError) as e:
             log.error(f"Unable to join channel '{self.name}'. {str(e)}")
             raise RoomError(f"Unable to join channel. {USER_IS_BOT_HELPTEXT}")
