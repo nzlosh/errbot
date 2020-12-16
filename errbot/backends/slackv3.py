@@ -500,8 +500,8 @@ class SlackBackend(ErrBot):
 
     def _rtm_handle_goodbye(self, **payload):
         """Handle Slack server's intention to close the connection"""
-        log.info("Received 'goodbye' from slack server.  Perform pre-emptive disconnect/reconnect.")
-        self.slack_rtm.stop()
+        log.info("Received 'goodbye' from slack server.")
+
 
     def _rtm_handle_reaction_added(self, **payload):
         self._handle_reaction_added(payload["web_client"], payload["data"])
