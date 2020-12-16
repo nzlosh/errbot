@@ -447,9 +447,12 @@ class SlackBackend(ErrBot):
 
             @RTMClient.run_on(event="open")
             def get_bot_identity(**payload):
-                self.bot_identifier = SlackPerson(payload["web_client"], payload["data"]["self"]["id"])
+                self.bot_identifier = SlackPerson(
+                    payload["web_client"], payload["data"]["self"]["id"]
+                )
                 # only hook up the message callback once we have our identity set.
                 self._setup_rtm_callbacks()
+
         else:
             if not self.signing_secret:
                 log.fatal(
@@ -461,7 +464,6 @@ class SlackBackend(ErrBot):
             log.info("Using Events API")
             self.slack_events = SlackEventAdapter(self.signing_secret, "/slack/events", flask_app)
             self._setup_event_callbacks()
-
 
         try:
             if is_rtm_api:
@@ -501,7 +503,6 @@ class SlackBackend(ErrBot):
     def _rtm_handle_goodbye(self, **payload):
         """Handle Slack server's intention to close the connection"""
         log.info("Received 'goodbye' from slack server.")
-
 
     def _rtm_handle_reaction_added(self, **payload):
         self._handle_reaction_added(payload["web_client"], payload["data"])
@@ -1218,15 +1219,12 @@ class SlackRoom(Room):
           * https://api.slack.com/methods/channels.list
           * https://api.slack.com/methods/groups.list
         """
-        if self.private:
-            return self._bot.slack_web.conversations_info(channel=self.id)["group"]
-        else:
-            return self._bot.slack_web.conversations_info(channel=self.id)["channel"]
+        return self._bot.slack_web.conversations_info(channel=self.id)["channel"]
 
     @property
     def private(self):
         """Return True if the room is a private group"""
-        return self._channel.id.startswith("G")
+        return self._channel_info["is_private"]
 
     @property
     def id(self):
@@ -1250,12 +1248,8 @@ class SlackRoom(Room):
 
     def leave(self, reason=None):
         try:
-            if self.id.startswith("C"):
-                log.info("Leaving channel %s (%s)", self, self.id)
-                self._bot.slack_web.channels_leave(channel=self.id)
-            else:
-                log.info("Leaving group %s (%s)", self, self.id)
-                self._bot.slack_web.conversations_leave(channel=self.id)
+            log.info("Leaving conversation %s (%s)", self, self.id)
+            self._bot.slack_web.conversations_leave(channel=self.id)
         except SlackAPIResponseError as e:
             if e.error == "user_is_bot":
                 raise RoomError(f"Unable to leave channel. {USER_IS_BOT_HELPTEXT}")
@@ -1266,10 +1260,10 @@ class SlackRoom(Room):
     def create(self, private=False):
         try:
             if private:
-                log.info("Creating group %s.", self)
+                log.info("Creating private conversation %s.", self)
                 self._bot.slack_web.conversations_create(name=self.name, is_private=True)
             else:
-                log.info("Creating channel %s.", self)
+                log.info("Creating conversation %s.", self)
                 self._bot.slack_web.conversations_create(name=self.name)
         except SlackAPIResponseError as e:
             if e.error == "user_is_bot":
@@ -1279,12 +1273,8 @@ class SlackRoom(Room):
 
     def destroy(self):
         try:
-            if self.id.startswith("C"):
-                log.info("Archiving channel %s (%s)", self, self.id)
-                self._bot.api_call("channels.archive", data={"channel": self.id})
-            else:
-                log.info("Archiving group %s (%s)", self, self.id)
-                self._bot.api_call("groups.archive", data={"channel": self.id})
+            log.info("Archiving conversation %s (%s)", self, self.id)
+            self._bot.slack_web.conversations_archive(self.id)
         except SlackAPIResponseError as e:
             if e.error == "user_is_bot":
                 raise RoomError(f"Unable to archive channel. {USER_IS_BOT_HELPTEXT}")
