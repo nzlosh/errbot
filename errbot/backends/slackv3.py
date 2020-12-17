@@ -1240,10 +1240,16 @@ class SlackRoom(Room):
 
     def join(self, username=None, password=None):
         log.info("Joining channel '{}'".format(self.name))
+        join_failure = True
         try:
             self._bot.slack_web.conversations_join(channel=self.id)
-        except (BotUserAccessError, SlackApiError) as e:
-            log.error(f"Unable to join channel '{self.name}'. {str(e)}")
+            join_failure = False
+        except SlackApiError as e:
+            log.error(f"Unable to join '{self.name}'. Slack API Error {str(e)}")
+        except BotUserAccessError as e:
+            log.error(f"OAuthv1 bot token not allowed to join channels. '{self.name}'.")
+
+        if join_failure:
             raise RoomError(f"Unable to join channel. {USER_IS_BOT_HELPTEXT}")
 
     def leave(self, reason=None):
