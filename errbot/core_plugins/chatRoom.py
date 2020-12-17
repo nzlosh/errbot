@@ -1,7 +1,7 @@
 import logging
 
 from errbot import BotPlugin, SeparatorArgParser, ShlexArgParser, botcmd
-from errbot.backends.base import RoomNotJoinedError
+from errbot.backends.base import RoomNotJoinedError, RoomError
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +18,8 @@ class ChatRoom(BotPlugin):
                 self.log.debug("Try to join room %s", repr(room))
                 try:
                     self._join_room(room)
+                except RoomError as e:
+                    self.log.error(f"{str(e)}")
                 except Exception:
                     # Ensure failure to join a room doesn't crash the plugin
                     # as a whole.
