@@ -1,7 +1,7 @@
 import logging
 
 from errbot import BotPlugin, SeparatorArgParser, ShlexArgParser, botcmd
-from errbot.backends.base import RoomNotJoinedError, RoomError
+from errbot.backends.base import RoomError, RoomNotJoinedError
 
 log = logging.getLogger(__name__)
 

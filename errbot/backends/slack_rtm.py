@@ -173,8 +173,9 @@ class SlackPerson(Person):
             return self._channelname
 
         channel = [
-            channel for channel in self._webclient.conversations_list()['channels']
-            if channel['id'] == self._channelid
+            channel
+            for channel in self._webclient.conversations_list()["channels"]
+            if channel["id"] == self._channelid
         ][0]
         if channel is None:
             raise RoomDoesNotExistError(f"No channel with ID {self._channelid} exists.")
@@ -334,7 +335,6 @@ class SlackRoomBot(RoomOccupant, SlackBot):
         return other.room.id == self.room.id and other.userid == self.userid
 
 
-
 class SlackRTMBackend(ErrBot):
     @staticmethod
     def _unpickle_identifier(identifier_str):
@@ -469,12 +469,12 @@ class SlackRTMBackend(ErrBot):
     def _reaction_added_event_handler(self, webclient: WebClient, event):
         """Event handler for the 'reaction_added' event"""
         emoji = event["reaction"]
-        log.debug('Added reaction: {}'.format(emoji))
+        log.debug("Added reaction: {}".format(emoji))
 
     def _reaction_removed_event_handler(self, webclient: WebClient, event):
         """Event handler for the 'reaction_removed' event"""
         emoji = event["reaction"]
-        log.debug('Removed reaction: {}'.format(emoji))
+        log.debug("Removed reaction: {}".format(emoji))
 
     def _presence_change_event_handler(self, webclient: WebClient, event):
         """Event handler for the 'presence_change' event"""
@@ -1158,23 +1158,22 @@ class SlackRTMBackend(ErrBot):
 
 
 class SlackRTMBackend(SlackBackendBase, ErrBot):
-
     def __init__(self, config):
         super().__init__(config)
         identity = config.BOT_IDENTITY
-        self.token = identity.get('token', None)
-        self.proxies = identity.get('proxies', None)
+        self.token = identity.get("token", None)
+        self.proxies = identity.get("proxies", None)
         if not self.token:
             log.fatal(
                 'You need to set your token (found under "Bot Integration" on Slack) in '
-                'the BOT_IDENTITY setting in your configuration. Without this token I '
-                'cannot connect to Slack.'
+                "the BOT_IDENTITY setting in your configuration. Without this token I "
+                "cannot connect to Slack."
             )
             sys.exit(1)
         self.sc = None  # Will be initialized in serve_once
         self.webclient = None
         self.bot_identifier = None
-        compact = config.COMPACT_OUTPUT if hasattr(config, 'COMPACT_OUTPUT') else False
+        compact = config.COMPACT_OUTPUT if hasattr(config, "COMPACT_OUTPUT") else False
         self.md = slack_markdown_converter(compact)
         self._register_identifiers_pickling()
 
@@ -1210,17 +1209,17 @@ class SlackRoom(Room):
         """
         _id = None
         # Cursors
-        cursor = ''
+        cursor = ""
         while cursor is not None:
             conversations_list = self.webclient.conversations_list(cursor=cursor)
             cursor = None
-            for channel in conversations_list['channels']:
-                if channel['name'] == self.name:
-                    _id = channel['id']
+            for channel in conversations_list["channels"]:
+                if channel["name"] == self.name:
+                    _id = channel["id"]
                     break
             else:
-                if conversations_list['response_metadata']['next_cursor'] is not None:
-                    cursor = conversations_list['response_metadata']['next_cursor']
+                if conversations_list["response_metadata"]["next_cursor"] is not None:
+                    cursor = conversations_list["response_metadata"]["next_cursor"]
                 else:
                     raise RoomDoesNotExistError(
                         f"{str(self)} does not exist (or is a private group you don't have access to)"
