@@ -1143,7 +1143,7 @@ class SlackBackend(ErrBot):
 
     @property
     def mode(self):
-        return "slack_sdk"
+        return "slackv3"
 
     def query_room(self, room):
         """ Room can either be a name or a channelid """
