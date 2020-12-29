@@ -432,7 +432,7 @@ class SlackBackend(ErrBot):
 
         self.connect_callback()
 
-    def serve_forever(self):
+    def serve_once(self):
         self.slack_web = WebClient(token=self.token, proxy=self.proxies)
 
         log.info("Verifying authentication token")
@@ -519,7 +519,6 @@ class SlackBackend(ErrBot):
         """Handle Slack server's intention to close the connection"""
         log.info("Received 'goodbye' from slack server.")
         self.slack_rtm.stop()
-        self.disconnect_callback()
 
     def _rtm_handle_reaction_added(self, **payload):
         self._handle_reaction_added(payload["web_client"], payload["data"])
