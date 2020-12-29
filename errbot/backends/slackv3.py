@@ -455,7 +455,7 @@ class SlackBackend(ErrBot):
         if is_rtm_api:
             log.info("Using RTM API")
             self.slack_rtm = RTMClient(
-                token=self.token, proxy=self.proxies, auto_reconnect=True
+                token=self.token, proxy=self.proxies, auto_reconnect=False
             )
 
             @RTMClient.run_on(event="open")
