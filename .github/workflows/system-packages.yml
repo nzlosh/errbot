@@ -12,17 +12,17 @@ jobs:
       - uses: actions/checkout@v2
       - run: lsb_release -a
   debian11_packages:
-    runs-on: debian-bullseye
+    container: debian-bullseye
     steps:
       - uses: actions/checkout@v2
       - run: lsb_release -a
   debian10_packages:
-    runs-on: debian-buster
+    container: debian-buster
     steps:
       - uses: actions/checkout@v2
       - run: lsb_release -a
   redhat84_packages:
-    runs-on: almalinux-8.4
+    container: almalinux-8.4
     steps:
       - uses: actions/checkout@v2
       - run: lsb_release -a
