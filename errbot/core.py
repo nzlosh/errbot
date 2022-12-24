@@ -713,7 +713,6 @@ class ErrBot(Backend, StoreMixin):
         """
         for admin in self._admins_to_notify():
             self.send(self.build_identifier(admin), warning)
-        log.warning(warning)
 
     def callback_message(self, msg: Message) -> None:
         """Processes for commands and dispatches the message to all the plugins."""
@@ -808,8 +807,8 @@ class ErrBot(Backend, StoreMixin):
             errors = ""
         errors += self.plugin_manager.activate_non_started_plugins()
         if errors:
+            log.warning(errors)
             self.warn_admins(errors)
-            log.info(errors)
         log.info("Notifying connection to all the plugins...")
         self.signal_connect_to_all_plugins()
         log.info("Plugin activation done.")
