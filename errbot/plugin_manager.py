@@ -435,6 +435,13 @@ class BotPluginManager(StoreMixin):
         errors = ""
         for name in self.get_plugins_activation_order():
             plugin = self.plugins.get(name)
+            # Skip plugins that failed to load and warn that there was a problem.
+            if plugin is None:
+                log.warning(
+                    "Skipping activation for plugin '%s' because it failed to load.",
+                    name,
+                )
+                continue
             try:
                 if self.is_plugin_blacklisted(name):
                     errors += (
