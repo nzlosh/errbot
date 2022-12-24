@@ -29,7 +29,7 @@ fixes:
 - chore: bump actions/checkout version (#1610)
 - docs: link to external Discord plugin documentation (#1615)
 - chore: add ARG to Dockerfile and add proper stop signal (#1613)
-
+- fix: improve error reporting for plugin activation (#1620)
 
 v6.1.9 (2022-06-11)
 -------------------
